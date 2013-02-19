@@ -10,6 +10,7 @@
 % TODO:
 %	* My machine specific settings must be removed
 %	* Could be interesting to auto-search for DTK and MRICron on typical paths
+%   * Solve conversion into CL3. It shoudn't be -v12
 %
 % AUTHORS:                  Ferran Poveda (ferran.poveda@uab.cat)
 % CREATION DATE:            31/01/2013
@@ -31,14 +32,23 @@ end
 
 % DICOM folder to process
 %dicom_folder = '/Volumes/INFO/fbeeper/Databases/SCANS/SantPau2012/Primer';
-dicom_folder = '/home/fbeeper/Escritorio/COR1';
-
+%dicom_folder = '/home/fbeeper/Escritorio/COR1';
+dbMain = '/Users/fbeeper/Databases/SCANS/SantPau2012';
+dicom_folder = uigetdir(dbMain,'Select DICOM directory to process)');
+if ~isdir(dicom_folder) % pre-check (being conservative :P)
+	error('Expected dicom_folder to be an existing directory.')
+else
+	if ~exist([dicom_folder filesep 'DICOMDIR'],'file')
+		error('Expected dicom_folder to be a parent DICOM directory.')
+	end
+end
 
 %% 1) Setting temporary path
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-setenv('PATH', [getenv('PATH') ':' MRICronToolsPath])
-setenv('PATH', [getenv('PATH') ':' DTKToolsPath])
-
+%setenv('PATH', [getenv('PATH') ':' MRICronToolsPath])
+%setenv('PATH', [getenv('PATH') ':' DTKToolsPath])
+addToSystemPath(MRICronToolsPath);
+addToSystemPath(DTKToolsPath);
 
 
 %% 2) Convert diffusion-dicom to dti-nii
@@ -78,6 +88,36 @@ v1nii_sink = sinkifyNII(b0nii,v1nii);
 %% 5) Visualize this awesome creation!!
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-orthoDTIslicer(b0nii,v1nii);
-orthoDTIslicer(b0nii,v1nii_sink);
+%orthoDTIslicer(b0nii,v1nii);
+%orthoDTIslicer(b0nii,v1nii_sink);
 
+
+%% 6) Load it into CL3
+
+[b0,v11,v12,v13] = nii2matlab(b0nii,v1nii_sink);
+dLenght=200;
+dSeedSampling=2500;
+spacing=[1.38 1.38 1.5];
+outputPath='/Users/fbeeper/Desktop/SantPau2012/Primer';
+b0mask = (b0<300).*(b0>100);
+JHUExportRawFiles(outputPath,b0mask,v11,-v12,v13,b0mask);
+
+% run CL3 with this
+if ismac
+    oldDYLDPath=getenv('DYLD_FRAMEWORK_PATH');
+    setenv('DYLD_FRAMEWORK_PATH','/usr/lib');% TODO: this is not!!!
+    CL3exe = '/Volumes/INFO/fbeeper/Developement/CrimsonLake/CL3QTinBash';
+else
+    oldDYLDPath=getenv('LD_LIBRARY_PATH');
+    setenv('LD_LIBRARY_PATH','');
+    CL3exe = '/home/fbeeper/Developer/crimsonlake/CL3QTinBash';
+end
+
+system([CL3exe ' -source ' outputPath])
+
+
+if ismac
+    setenv('DYLD_FRAMEWORK_PATH',oldDYLDPath)
+else
+    setenv('LD_LIBRARY_PATH',oldDYLDPath)
+end
